@@ -15,10 +15,13 @@ export interface FinancialProfile {
 }
 
 export interface RecommendationResult {
-  recommendation: string;
-  why: string;
-  priorityOrder: string[];
-  nextActions: string[];
+  summary: string;
+  personalizedWhy: string;
+  suggestedStrategy: string;
+  risksAndTradeoffs: string;
+  nextActions: [string, string, string];
+  /** Short label for the primary coaching theme */
+  focusArea: string;
 }
 
 export const STORAGE_KEY = "smart-money-coach-profile";

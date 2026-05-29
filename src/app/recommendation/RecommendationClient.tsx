@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { CoachText } from "@/components/CoachText";
 import { generateRecommendation } from "@/lib/recommendation";
 import { loadProfile } from "@/lib/storage";
 import type { FinancialProfile, RecommendationResult } from "@/types/financial";
@@ -48,56 +49,61 @@ export default function RecommendationClient() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
       <p className="text-sm font-medium uppercase tracking-wider text-emerald-600">
-        Your plan
+        Your personalized plan
       </p>
       <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-        Recommendation
+        Coach recommendation
       </h1>
+      <p className="mt-3 inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
+        Primary focus: {result.focusArea}
+      </p>
 
       <section className="mt-8 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-6 shadow-lg sm:p-8">
-        <h2 className="text-lg font-semibold text-emerald-900">Summary</h2>
-        <p className="mt-3 text-lg leading-relaxed text-slate-800">
-          {result.recommendation}
-        </p>
-      </section>
-
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <h2 className="text-lg font-semibold text-slate-900">Why</h2>
-        <p className="mt-3 leading-relaxed text-slate-600">{result.why}</p>
-      </section>
-
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <h2 className="text-lg font-semibold text-slate-900">
-          Suggested Priority Order
+        <h2 className="text-lg font-semibold text-emerald-900">
+          Recommendation summary
         </h2>
-        <ol className="mt-4 space-y-3">
-          {result.priorityOrder.map((item, i) => (
+        <p className="mt-3 text-lg leading-relaxed text-slate-800">{result.summary}</p>
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <h2 className="text-lg font-semibold text-slate-900">Personalized why</h2>
+        <CoachText
+          className="mt-3 leading-relaxed text-slate-600"
+          children={result.personalizedWhy}
+        />
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <h2 className="text-lg font-semibold text-slate-900">Suggested strategy</h2>
+        <CoachText
+          className="mt-3 leading-relaxed text-slate-700"
+          children={result.suggestedStrategy}
+        />
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/80 p-6 sm:p-8">
+        <h2 className="text-lg font-semibold text-amber-950">Risks & tradeoffs</h2>
+        <CoachText
+          className="mt-3 leading-relaxed text-amber-900/90"
+          children={result.risksAndTradeoffs}
+        />
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <h2 className="text-lg font-semibold text-slate-900">3 next actions</h2>
+        <ol className="mt-4 space-y-4">
+          {result.nextActions.map((action, i) => (
             <li
-              key={item}
-              className="flex items-start gap-3 rounded-xl bg-slate-50 px-4 py-3"
+              key={action}
+              className="flex gap-4 rounded-xl border border-slate-100 bg-slate-50 p-4"
             >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">
                 {i + 1}
               </span>
-              <span className="pt-0.5 text-slate-800">{item}</span>
+              <p className="pt-1 text-slate-700">{action}</p>
             </li>
           ))}
         </ol>
-      </section>
-
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <h2 className="text-lg font-semibold text-slate-900">3 Next Actions</h2>
-        <ul className="mt-4 space-y-4">
-          {result.nextActions.map((action, i) => (
-            <li key={action} className="flex gap-3">
-              <span className="mt-1 text-emerald-600">✓</span>
-              <span className="text-slate-700">
-                <span className="font-medium text-slate-900">Step {i + 1}:</span>{" "}
-                {action}
-              </span>
-            </li>
-          ))}
-        </ul>
       </section>
 
       <ProfileSnapshot profile={profile} />
@@ -106,12 +112,29 @@ export default function RecommendationClient() {
 }
 
 function ProfileSnapshot({ profile }: { profile: FinancialProfile }) {
+  const effective =
+    profile.retirementContributionPct + profile.employerMatchPct;
+  const monthlyIncome = profile.householdIncome / 12;
+  const savingsMonths =
+    monthlyIncome > 0
+      ? (profile.savingsAmount / monthlyIncome).toFixed(1)
+      : "—";
+
   const rows: [string, string][] = [
     ["Age", String(profile.age)],
-    ["Household income", `$${profile.householdIncome.toLocaleString()}`],
-    ["Mortgage", `$${profile.mortgageBalance.toLocaleString()} @ ${profile.mortgageInterestRate}%`],
-    ["Retirement + match", `${profile.retirementContributionPct + profile.employerMatchPct}%`],
-    ["Savings / other debt", `$${profile.savingsAmount.toLocaleString()} / $${profile.otherDebt.toLocaleString()}`],
+    ["Household income", `$${profile.householdIncome.toLocaleString()}/yr`],
+    [
+      "Mortgage",
+      `$${profile.mortgageBalance.toLocaleString()} @ ${profile.mortgageInterestRate}% ($${profile.monthlyMortgagePayment.toLocaleString()}/mo)`,
+    ],
+    [
+      "Retirement",
+      `${profile.retirementContributionPct}% you + ${profile.employerMatchPct}% match (${effective}% total)`,
+    ],
+    [
+      "Savings / debt",
+      `$${profile.savingsAmount.toLocaleString()} (~${savingsMonths} mo) / $${profile.otherDebt.toLocaleString()} debt`,
+    ],
     ["Risk tolerance", profile.riskTolerance],
     ["Goal", profile.financialGoal],
   ];
