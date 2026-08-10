@@ -5,8 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/sitemap.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "preview": "npx serve out -l 4173",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "node tests/run-all.mjs",
+    "test:build": "npm run typecheck && npm run build && npm test"
   },
   "dependencies": {
     "next": "16.2.6",

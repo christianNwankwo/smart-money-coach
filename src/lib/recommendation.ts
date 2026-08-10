@@ -1,3 +1,16 @@
+/**
+ * Recommendation engine — classification plus computed outcomes.
+ *
+ * The profile is classified into tiers by profile-analysis.ts so the engine
+ * knows what to order. Every figure in the prose then comes from lib/finance,
+ * computed against the visitor's own numbers and cited directly. Nothing here
+ * is a guess.
+ *
+ * The copy itself is reframed as illustrations, not first-person advice. The
+ * engine never says "I'd" or "you should"; it says "here is what the numbers
+ * show" and "one scenario looks like this."
+ */
+
 import {
   analyzeProfile,
   focusAreaLabel,
@@ -6,18 +19,28 @@ import {
   type ProfileAnalysis,
   type PrimaryFocus,
 } from "@/lib/profile-analysis";
+import { computeOutcomes } from "@/lib/finance-recommendation";
+import type { ComputedOutcomes } from "@/lib/finance-recommendation";
 import type { FinancialProfile, RecommendationResult } from "@/types/financial";
+
+const DISCLAIMER =
+  "Disclaimer: These are arithmetic results, not a recommendation. " +
+  "They use only the numbers you typed — not your tax situation, job " +
+  "security, health, or anything else a person who knows you would weigh. " +
+  "Treat the figures below as illustrations: here is what one scenario " +
+  "could look like with your inputs.";
 
 export function generateRecommendation(
   profile: FinancialProfile
 ): RecommendationResult {
   const a = analyzeProfile(profile);
+  const outcomes = computeOutcomes(profile);
 
-  const summary = buildSummary(a);
-  const personalizedWhy = buildPersonalizedWhy(a);
-  const suggestedStrategy = buildStrategy(a);
-  const risksAndTradeoffs = buildRisks(a);
-  const nextActions = buildNextActions(a);
+  const summary = buildSummary(a, outcomes);
+  const personalizedWhy = buildPersonalizedWhy(a, outcomes);
+  const suggestedStrategy = buildStrategy(a, outcomes);
+  const risksAndTradeoffs = buildRisks(a, outcomes);
+  const nextActions = buildNextActions(a, outcomes);
 
   return {
     summary,
@@ -29,54 +52,179 @@ export function generateRecommendation(
   };
 }
 
-function buildSummary(a: ProfileAnalysis): string {
+// ---------------------------------------------------------------- summary
+
+function buildSummary(a: ProfileAnalysis, o: ComputedOutcomes): string {
   const p = a.profile;
   const opener = ageOpener(a);
-  const core = primaryFocusSummary(a);
-  const goalTie = goalConnection(a);
-
-  return `${opener} ${core}${goalTie ? ` ${goalTie}` : ""}`.replace(/\s+/g, " ").trim();
+  const core = primaryFocusSummary(a, o);
+  const note = DISCLAIMER;
+  return `${opener}\n\n${core}\n\n${note}`;
 }
 
-function buildPersonalizedWhy(a: ProfileAnalysis): string {
+// ---------------------------------------------------------------- why
+
+function buildPersonalizedWhy(
+  a: ProfileAnalysis,
+  o: ComputedOutcomes
+): string {
   const p = a.profile;
   const paragraphs: string[] = [];
 
   paragraphs.push(
-    `At ${p.age}, with about ${a.yearsToRetirement} years before a typical retirement window, time is still your biggest asset — but only if dollars are pointed at the right bottlenecks.`
+    `At ${p.age}, household income of ${money(
+      p.householdIncome
+    )} puts you roughly ${a.yearsToRetirement} years from a typical retirement window. ` +
+      `Each section below cites the arithmetic that applies to your numbers — ` +
+      `none of it is generic advice.`
   );
 
-  paragraphs.push(savingsParagraph(a));
-  paragraphs.push(debtParagraph(a));
+  paragraphs.push(savingsParagraph(a, o));
+  paragraphs.push(debtParagraph(a, o));
+  if (a.hasMortgage) paragraphs.push(mortgageParagraph(a, o));
   paragraphs.push(retirementParagraph(a));
-
-  if (a.hasMortgage) {
-    paragraphs.push(mortgageParagraph(a));
-  }
-
   paragraphs.push(incomeParagraph(a));
   paragraphs.push(`${riskTone(p.riskTolerance)}`);
 
   return paragraphs.filter(Boolean).join("\n\n");
 }
 
-function buildStrategy(a: ProfileAnalysis): string {
-  const phases: string[] = [];
-  const p = a.profile;
-
-  phases.push(
-    `**Phase 1 (next 90 days):** ${phaseOne(a)}`
+function savingsParagraph(a: ProfileAnalysis, o: ComputedOutcomes): string {
+  const ef = o.emergencyFund;
+  if (ef.gap <= 0) {
+    return (
+      `Your ${money(ef.current)} in liquid savings covers about ` +
+      `${formatMonths(ef.monthsCovered)} of expenses — above the six-month ` +
+      `benchmark. That means cash is not the bottleneck right now.`
+    );
+  }
+  return (
+    `You have ${money(ef.current)} saved, which covers about ` +
+    `${formatMonths(ef.monthsCovered)} of expenses. Six months is roughly ` +
+    `${money(ef.target)}, so the gap is ${money(ef.gap)}. ` +
+    `Until that cushion exists, every other financial move — investing, ` +
+    `extra mortgage payments — runs on a thinner margin than it would with ` +
+    `a full fund.`
   );
+}
+
+function debtParagraph(a: ProfileAnalysis, o: ComputedOutcomes): string {
+  const p = a.profile;
+  if (p.otherDebt <= 0) {
+    return `No non-mortgage debt was reported — that frees cash flow for the mortgage, retirement, or your goal without competing interest charges.`;
+  }
+  const base = `Non-mortgage debt of ${money(
+    p.otherDebt
+  )} (${formatPct(a.debtToIncome * 100)} of income).`;
+  if (!o.debt) {
+    return `${base} The interest rate and minimums on each account determine how long this takes — enter them individually in the Debt Payoff tool for a precise plan.`;
+  }
+  const d = o.debt;
+  return (
+    `${base} As an illustration: with an extra ${money(
+      d.illustrationExtra
+    )}/month, the ` +
+    `avalanche method clears everything in about ${formatMonths(
+      d.avalanche.months
+    )} at a total interest cost of ${money(d.avalanche.interest)}. ` +
+    `The snowball would take about ${formatMonths(
+      d.snowball.months
+    )} and cost ${money(d.snowball.interest)} — ` +
+    `${money(d.interestSaved)} more in interest, ` +
+    (d.firstCleared
+      ? `but it clears "${d.firstCleared.name}" in month ${d.firstCleared.month}.`
+      : `though the first-account win can make it easier to stick with.`)
+  );
+}
+
+function mortgageParagraph(a: ProfileAnalysis, o: ComputedOutcomes): string {
+  const p = a.profile;
+  if (!o.mortgage) {
+    return `Mortgage: ${money(p.mortgageBalance)} at ${
+      p.mortgageInterestRate
+    }% with ${money(p.monthlyMortgagePayment)}/month payments.`;
+  }
+  const m = o.mortgage;
+  const base = `Mortgage balance of ${money(
+    m.loanAmount
+  )} at ${p.mortgageInterestRate}%, with ${money(m.payment)}/month. ` +
+    `At this pace it retires in about ${formatMonths(m.monthsRemaining)} ` +
+    `(roughly ${payoffLabel(m.monthsRemaining)}), at a total remaining interest cost ` +
+    `of ${money(m.totalInterestRemaining)}.`;
+
+  if (!m.illustration) return base;
+
+  return (
+    `${base}\n\n` +
+    `**Illustration — what an extra ${money(m.illustration.extraMonthly)}/month would do:** ` +
+    `payoff moves from ${m.illustration.payoffWithout} to ${m.illustration.payoffWith} ` +
+    `(${m.illustration.monthsSaved} months sooner), avoiding ${money(
+      m.illustration.interestSaved
+    )} in interest. ` +
+    `Every extra dollar saves about ${formatPct(
+      m.illustration.savedPerExtraDollar * 100
+    )} in interest — a guaranteed return.`
+  );
+}
+
+function retirementParagraph(a: ProfileAnalysis): string {
+  const p = a.profile;
+  const total = a.ownContribution + a.employerMatch;
+  if (a.matchUncaptured) {
+    return (
+      `Retirement: contributing ${formatPct(
+        a.ownContribution
+      )} while the employer offers ` +
+      `up to ${formatPct(a.employerMatch)} — that is unclaimed compensation ` +
+      `worth ${money(
+        Math.round(p.householdIncome * (a.employerMatch / 100))
+      )}/year. ` +
+      `No other move comes close to the effective return of capturing a match.`
+    );
+  }
+  const status = a.retirementStatus.replace("-", " ");
+  return (
+    `Retirement savings rate of ${formatPct(total)} all-in ` +
+    `(${formatPct(a.ownContribution)} from you + ${formatPct(
+      a.employerMatch
+    )} match) ` +
+    `is ${status} at age ${p.age}.`
+  );
+}
+
+function incomeParagraph(a: ProfileAnalysis): string {
+  const tierNote: Record<ProfileAnalysis["incomeTier"], string> = {
+    modest:
+      "At this income, small automated amounts compound — consistency beats size.",
+    middle:
+      "Your income supports meaningful monthly progress if transfers happen right after payday.",
+    "upper-middle":
+      "There is likely room for parallel goals once the sequence is set — avoid spreading too thin too early.",
+    high:
+      "Higher income raises the stakes for tax-efficient ordering: match, HSA, IRA, then taxable investing.",
+  };
+  return tierNote[a.incomeTier];
+}
+
+// ---------------------------------------------------------------- strategy
+
+function buildStrategy(
+  a: ProfileAnalysis,
+  o: ComputedOutcomes
+): string {
+  const phases: string[] = [];
+
+  phases.push(`**Phase 1 (next 90 days):** ${phaseOne(a, o)}`);
 
   if (a.secondaryFocus && a.secondaryFocus !== a.primaryFocus) {
     phases.push(
-      `**Phase 2 (months 4–12):** ${phaseTwo(a)}`
+      `**Phase 2 (months 4–12):** ${phaseTwo(a, o)}`
     );
   }
 
-  phases.push(`**Phase 3 (12+ months):** ${phaseThree(a)}`);
+  phases.push(`**Phase 3 (12+ months):** ${phaseThree(a, o)}`);
 
-  const allocation = allocationGuidance(a);
+  const allocation = allocationGuidance(a, o);
   if (allocation) {
     phases.push(`**How to split extra dollars:** ${allocation}`);
   }
@@ -84,371 +232,431 @@ function buildStrategy(a: ProfileAnalysis): string {
   return phases.join("\n\n");
 }
 
-function buildRisks(a: ProfileAnalysis): string {
+function phaseOne(a: ProfileAnalysis, o: ComputedOutcomes): string {
+  switch (a.primaryFocus) {
+    case "emergency-fund": {
+      const ef = o.emergencyFund;
+      const monthly = Math.max(100, Math.round(ef.gap / 12));
+      return (
+        `Build savings toward ${money(ef.target)} — a six-month cushion ` +
+        `at your income. That means adding about ${money(monthly)}/month ` +
+        `for roughly 12 months while covering minimums and capturing any employer match.`
+      );
+    }
+    case "debt-paydown": {
+      if (!o.debt) {
+        return `List every non-mortgage balance with its APR and minimum payment; pay minimums everywhere and direct every extra dollar to the highest-rate account.`;
+      }
+      return (
+        `List debts by APR. Pay minimums everywhere and send every extra dollar ` +
+        `to the highest-rate balance. At ${money(o.debt.illustrationExtra)}/month extra, ` +
+        `the avalanche clears everything in about ${formatMonths(o.debt.avalanche.months)}.`
+      );
+    }
+    case "retirement-catch-up":
+      if (a.matchUncaptured) {
+        return `Adjust payroll this week to capture the full ${formatPct(a.employerMatch)} employer match — no other move returns that much immediately.`;
+      }
+      return `Increase deferrals by 1% of salary and confirm investment elections match your stated ${a.profile.riskTolerance} risk comfort.`;
+    case "mortgage-optimization": {
+      const base = `Compare refinance offers: your rate is ${a.profile.mortgageInterestRate}% with about ${formatMonths(o.mortgage?.monthsRemaining ?? 0)} left.`;
+      if (o.refinance) {
+        const r = o.refinance;
+        return (
+          `${base} Refinancing to roughly ${r.newRate}% at a cost of about ` +
+          `${money(r.closingCosts)} in fees would ` +
+          (r.breakEvenMonths !== null
+            ? `break even in about ${r.breakEvenMonths} months and ` +
+              (r.lifetimeSaving > 0
+                ? `save ${money(r.lifetimeSaving)} over the full term.`
+                : `cost ${money(-r.lifetimeSaving)} more over the full term — not worth it.`)
+            : `never break even — the fees are not recovered by the rate drop.`)
+        );
+      }
+      return `${base} Get two no-cost estimates, run the Refinance Break-Even tool, and compare the honest break-even against how long you expect to keep the house.`;
+    }
+    case "wealth-building":
+      return `Confirm a six-month emergency fund, then open automated investing at ${money(suggestedInvestAmount(a))}/month in a diversified allocation matched to your ${a.profile.riskTolerance} risk profile.`;
+    default:
+      return `Automate bills, minimum debt payments, and the full employer match. Track spending for 30 days to find at least ${money(Math.round(a.profile.householdIncome / 12 / 20))}/month for the highest-priority goal.`;
+  }
+}
+
+function phaseTwo(a: ProfileAnalysis, o: ComputedOutcomes): string {
+  const secondary = a.secondaryFocus ?? "stability-first";
+  switch (secondary) {
+    case "emergency-fund":
+      return `Finish the six-month emergency fund (${money(o.emergencyFund.target)}) before scaling up optional investing.`;
+    case "debt-paydown":
+      return `Continue the highest-rate-first plan until non-mortgage debt reaches zero — the Debt Payoff tool keeps both avalanche and snowball visible side by side.`;
+    case "retirement-catch-up":
+      return `Raise total retirement contributions by 1% every six months until the rate reaches roughly 15–20% of income.`;
+    case "mortgage-optimization":
+      if (o.mortgage?.illustration) {
+        return `Automate an extra ${money(o.mortgage.illustration.extraMonthly)}/month toward principal — at the current rate this pulls the payoff date forward by ${o.mortgage.illustration.monthsSaved} months.`;
+      }
+      return `Apply half of any raise to mortgage principal if the rate is above 6%; otherwise revisit taxable investing.`;
+    case "wealth-building":
+      return `Expand brokerage contributions if cash flow stays comfortable after Phase 1.`;
+    case "goal-acceleration":
+      return `Increase monthly transfers toward ${a.goalPhrase} by half of any raise or bonus.`;
+    default:
+      return `Reassess progress and direct the next available dollar to the weakest metric among savings, debt, and retirement.`;
+  }
+}
+
+function phaseThree(a: ProfileAnalysis, o: ComputedOutcomes): string {
+  if (a.goalThemes.includes("retirement")) {
+    return `Annual review: project the retirement balance at the current savings rate and adjust deferrals until the trajectory fits ${a.goalPhrase} by the target age.`;
+  }
+  if (a.goalThemes.includes("mortgage-free")) {
+    if (o.mortgage?.illustration) {
+      return `If you sustain ${money(o.mortgage.illustration.extraMonthly)}/month extra, the mortgage retires around ${o.mortgage.illustration.payoffWith}. Revisit this projection annually — raises and windfalls shorten it further.`;
+    }
+    return `Model the mortgage payoff date with the Deep Dive tool and revisit it each year — a small extra payment now compounds into months saved.`;
+  }
+  if (a.investReadiness === "aggressive" || a.investReadiness === "ready") {
+    return `Rebalance investments yearly, increase the savings rate with raises, and revisit whether mortgage prepay still beats the after-tax expected return.`;
+  }
+  return `Build the habit of reviewing insurance, estate beneficiaries, and the goal timeline each year — a twelve-month cadence catches drift before it compounds.`;
+}
+
+function allocationGuidance(
+  a: ProfileAnalysis,
+  o: ComputedOutcomes
+): string | null {
+  if (a.surplusCapacity === "tight") {
+    return `With tight cash flow, a simple waterfall: essentials → employer match → ${money(Math.max(50, Math.round(o.emergencyFund.gap / 24)))}/mo to savings → highest-rate debt. Optional mortgage prepay and investing wait until after that sequence.`;
+  }
+  if (a.primaryFocus === "mortgage-optimization" && a.retirementStatus !== "behind") {
+    return `Split extra cash about 60/40 between mortgage principal and retirement until the rate falls below 6% or is refinanced, then shift toward investing.`;
+  }
+  if (a.investReadiness === "aggressive") {
+    return `After the match and a six-month cash cushion: roughly 70% to diversified investing, 30% to goal-specific savings or optional mortgage prepay.`;
+  }
+  if (a.investReadiness === "ready") {
+    return `After basics: about 50% to retirement and tax-advantaged accounts, 30% to a goal account, and 20% to a brokerage or mortgage prepay — the exact split depends on whether the current mortgage rate feels more like a cost or an afterthought.`;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- risks
+
+function buildRisks(
+  a: ProfileAnalysis,
+  o: ComputedOutcomes
+): string {
   const risks: string[] = [];
-  const p = a.profile;
 
   if (a.savingsAdequacy === "critical" || a.savingsAdequacy === "thin") {
     risks.push(
-      `With only about ${formatMonths(a.savingsMonths)} of expenses in cash ($${money(a.profile.savingsAmount)}), a job loss or medical bill could force high-interest borrowing — which would work against ${a.goalPhrase}.`
+      `Only ${formatMonths(a.savingsMonths)} of expenses in cash ` +
+        `(${money(a.profile.savingsAmount)} saved) leaves a thin margin for a job ` +
+        `loss or medical bill. High-interest borrowing in an emergency would undo ` +
+        `progress on ${a.goalPhrase} faster than this engine can model.`
     );
   }
 
   if (a.debtBurden === "heavy" || a.debtBurden === "moderate") {
+    const p = a.profile;
+    const extra = o.debt?.illustrationExtra ?? Math.round(p.householdIncome / 12 / 20);
     risks.push(
-      `Carrying $${money(p.otherDebt)} in non-mortgage debt (${formatPct(a.debtToIncome * 100)} of income) means more of every paycheck is committed before you can invest or prepay the mortgage.`
+      `${money(p.otherDebt)} in non-mortgage debt ` +
+        `(${formatPct(a.debtToIncome * 100)} of gross income) ` +
+        `means that amount of every paycheck is not available for saving or ` +
+        `investing. At an extra ${money(extra)}/month, the Debt Payoff tool ` +
+        `shows exactly how long this takes to clear — the length of that runway ` +
+        `is the risk of any competing priority.`
     );
   }
 
   if (a.retirementStatus === "behind") {
     risks.push(
-      `Saving only ${formatPct(a.effectiveRetirement)} toward retirement (including match) at age ${p.age} increases the chance you'll need to work longer or cut spending later to reach ${a.goalPhrase}.`
+      `At ${formatPct(a.effectiveRetirement)} all-in retirement savings ` +
+        `at age ${a.profile.age}, more of the future landing depends on investment ` +
+        `returns arriving as hoped — and less on the contributions that are under ` +
+        `your control.`
     );
   }
 
   if (a.mortgageOutlook === "costly" && a.investReadiness !== "not-yet") {
     risks.push(
-      `Every dollar invested in the market while holding a ${p.mortgageInterestRate}% mortgage is a tradeoff: long-term returns may win, but the ${p.mortgageInterestRate}% rate is a guaranteed cost until the balance is gone.`
+      `A mortgage at ${a.profile.mortgageInterestRate}% is a guaranteed "return" ` +
+        `on every extra dollar put toward it. Investing instead means the market ` +
+        `has to beat that rate after tax, every year, to come out ahead. The Deep ` +
+        `Dive tool shows exactly what extra principal is worth — that figure is the ` +
+        `comparison point.`
     );
   } else if (a.mortgageOutlook === "favorable" && a.goalThemes.includes("mortgage-free")) {
     risks.push(
-      `Aggressively prepaying a ${p.mortgageInterestRate}% mortgage may feel satisfying, but at your rate it may underperform tax-advantaged retirement growth — weigh peace of mind against opportunity cost.`
-    );
-  }
-
-  if (p.riskTolerance === "high" && a.investReadiness !== "aggressive") {
-    risks.push(
-      `High risk tolerance can tempt you to invest before the foundation is set; volatility hurts most when you might need to sell savings to cover bills or debt payments.`
-    );
-  }
-
-  if (p.riskTolerance === "low" && a.investReadiness === "ready") {
-    risks.push(
-      `Conservative preferences may leave you under-invested for a ${a.yearsToRetirement}-year horizon — too much cash can quietly lose ground to inflation relative to your goal.`
+      `Prepaying a ${a.profile.mortgageInterestRate}% mortgage aggressively ` +
+        `may feel satisfying, but at this rate it may trail behind tax-advantaged ` +
+        `retirement growth. The trade is peace of mind against expected return — ` +
+        `both sides are real, and neither answer fits everyone.`
     );
   }
 
   if (a.matchUncaptured) {
     risks.push(
-      `Leaving part of your employer's ${formatPct(a.employerMatch)} match on the table is an immediate pay cut you can't recover later — it's often the highest-return move available.`
+      `Leaving part of the employer's ${formatPct(a.employerMatch)} match on ` +
+        `the table is an immediate pay cut you cannot recover later.`
     );
   }
 
   if (a.surplusCapacity === "tight") {
     risks.push(
-      `Housing consumes about ${formatPct(a.housingPaymentRatio * 100)} of gross income ($${money(p.monthlyMortgagePayment)}/month). Big simultaneous moves (max retirement + extra mortgage + investing) may strain cash flow — sequence matters.`
+      `Housing consumes about ${formatPct(a.housingPaymentRatio * 100)} of ` +
+        `gross income (${money(a.profile.monthlyMortgagePayment)}/month). ` +
+        `Trying to max retirement, prepay the mortgage and invest all at once ` +
+        `may strain cash flow — the order matters more than the speed.`
     );
   }
 
   if (risks.length === 0) {
     risks.push(
-      `Your profile is relatively balanced; the main risk is complacency — without automatic increases to savings and retirement, inflation and lifestyle creep can erode progress toward ${a.goalPhrase}.`
+      `The profile is relatively balanced. The main risk is complacency: ` +
+        `without automatic increases to savings and retirement, inflation and ` +
+        `lifestyle creep can erode progress toward ${a.goalPhrase} without a ` +
+        `single crisis.`
     );
   }
 
   return risks.slice(0, 4).join("\n\n");
 }
 
+// ---------------------------------------------------------------- next actions
+
 function buildNextActions(
-  a: ProfileAnalysis
+  a: ProfileAnalysis,
+  o: ComputedOutcomes
 ): [string, string, string] {
   const p = a.profile;
   const actions: string[] = [];
 
   switch (a.primaryFocus) {
-    case "emergency-fund":
+    case "emergency-fund": {
+      const ef = o.emergencyFund;
+      const monthly = Math.max(100, Math.round(ef.gap / 12));
       actions.push(
-        `Set up automatic transfers of $${money(Math.max(100, Math.round(a.savingsGap / 12)))}/month into a high-yield savings account until you reach $${money(a.emergencyTarget)} (roughly 6 months of take-home cushion at your income).`
+        `Transfer ${money(monthly)}/month automatically into a high-yield ` +
+          `savings account until the balance reaches ${money(ef.target)} ` +
+          `(about six months of expenses at your income).`
       );
       actions.push(
         a.debtBurden !== "none"
-          ? `Keep paying minimums on $${money(p.otherDebt)} debt, but pause extra principal on the mortgage until you have at least 3 months of expenses saved.`
-          : `Park windfalls (tax refunds, bonuses) directly into savings before increasing investing or mortgage prepayments.`
+          ? `Pay minimums on ${money(p.otherDebt)} in debt, but pause extra ` +
+              `principal on the mortgage until at least three months of expenses are saved.`
+          : `Direct windfalls (tax refunds, bonuses) to savings before increasing ` +
+              `investing or mortgage prepayments.`
       );
       break;
-    case "debt-paydown":
-      actions.push(
-        `Write down every non-mortgage balance, APR, and minimum payment — attack the highest-rate account first while paying minimums on the rest (debt is ${formatPct(a.debtToIncome * 100)} of your $${money(p.householdIncome)} income).`
-      );
-      actions.push(
-        `Find $${money(Math.min(300, Math.round(p.householdIncome / 200)))}+/month by trimming one discretionary category and send it to debt until you're under 15% debt-to-income.`
-      );
+    }
+    case "debt-paydown": {
+      if (o.debt) {
+        actions.push(
+          `Direct ${money(o.debt.illustrationExtra)}/month extra toward the ` +
+            `highest-rate debt. Using the avalanche method, this clears ` +
+            `everything in about ${formatMonths(o.debt.avalanche.months)} ` +
+            `at a cost of ${money(o.debt.avalanche.interest)} in interest.`
+        );
+        actions.push(
+          `Open the Debt Payoff tool, list every account with its actual rate ` +
+            `and balance, and compare avalanche against snowball — the interest ` +
+            `gap between them is the price of the quicker win.`
+        );
+      } else {
+        actions.push(
+          `Write down every balance, APR, and minimum payment. Attack the ` +
+            `highest-rate account first while paying minimums on the rest.`
+        );
+        actions.push(
+          `Find ${money(Math.min(300, Math.round(p.householdIncome / 200)))}/month ` +
+            `by trimming one discretionary category and send it to the highest-rate debt.`
+        );
+      }
       break;
-    case "retirement-catch-up":
+    }
+    case "retirement-catch-up": {
       actions.push(
         a.matchUncaptured
-          ? `Increase your payroll deferral this week until you're capturing the full ${formatPct(a.employerMatch)} employer match — that's immediate return on your ${formatPct(a.ownContribution)} contribution.`
-          : `Raise retirement contributions by 1% of salary now; calendar another 1% bump in 6 months until you reach at least ${targetRetirementPct(a)}% total (you're at ${formatPct(a.effectiveRetirement)}%).`
+          ? `Increase payroll deferrals this week until you capture the full ` +
+              `${formatPct(a.employerMatch)} employer match — that is an immediate ` +
+              `${formatPct(a.employerMatch)} return on the contribution, which no ` +
+              `other move matches.`
+          : `Raise retirement contributions by 1% now and calendar another 1% bump ` +
+              `in six months.`
       );
       actions.push(
         p.age >= 50
-          ? `Confirm whether catch-up contributions apply to your 401(k)/IRA this year — at ${p.age}, the extra room can close gaps faster.`
-          : `Log into your retirement plan and confirm your fund mix matches ${p.riskTolerance} risk tolerance (not too conservative for ${a.yearsToRetirement} years out).`
+          ? `Confirm whether catch-up contributions apply to your 401(k) or IRA ` +
+              `this year — at ${p.age}, the extra room helps close gaps faster.`
+          : `Log into the retirement plan and confirm the fund mix matches ` +
+              `${p.riskTolerance} risk comfort for a ${a.yearsToRetirement}-year window.`
       );
       break;
-    case "mortgage-optimization":
+    }
+    case "mortgage-optimization": {
+      if (o.refinance) {
+        actions.push(
+          `Request refinance estimates from two lenders. With your ` +
+            `${p.mortgageInterestRate}% rate, a move to roughly ` +
+            `${o.refinance.newRate}% with about ${money(o.refinance.closingCosts)} ` +
+            `in costs would ` +
+            (o.refinance.breakEvenMonths !== null
+              ? `break even in ${o.refinance.breakEvenMonths} months and ` +
+                (o.refinance.lifetimeSaving > 0
+                  ? `save ${money(o.refinance.lifetimeSaving)} over the full term.`
+                  : `cost ${money(-o.refinance.lifetimeSaving)} more — worse than staying.`)
+              : `never break even.`)
+        );
+      } else {
+        actions.push(
+          `Request two no-cost refinance estimates and compare the break-even ` +
+            `against how long you expect to keep the house.`
+        );
+      }
+      if (o.mortgage?.illustration) {
+        actions.push(
+          `Add ${money(o.mortgage.illustration.extraMonthly)}/month in extra ` +
+            `principal. At your rate this cuts the payoff date from ` +
+            `${o.mortgage.illustration.payoffWithout} to ${o.mortgage.illustration.payoffWith} ` +
+            `and saves ${money(o.mortgage.illustration.interestSaved)} in interest ` +
+            `(${money(Math.round(o.mortgage.illustration.savedPerExtraDollar * 100))}¢ ` +
+            `saved per extra dollar).`
+        );
+      } else {
+        actions.push(
+          `Add one extra principal payment a year (${money(p.monthlyMortgagePayment)}) ` +
+            `or round up each payment by $50–100 while keeping retirement at the match minimum.`
+        );
+      }
+      break;
+    }
+    case "wealth-building": {
       actions.push(
-        `Request no-cost refinance estimates from two lenders — compare monthly savings on your $${money(p.mortgageBalance)} balance at ${p.mortgageInterestRate}% vs closing costs and break-even months.`
+        `Automate ${money(suggestedInvestAmount(a))}/month into a diversified ` +
+          `portfolio matched to ${p.riskTolerance} risk — only after the ` +
+          `emergency fund and retirement match are handled.`
       );
       actions.push(
-        `If you stay put, add one extra principal payment per year ($${money(p.monthlyMortgagePayment)}) or round up each payment by $50–100 while keeping retirement at match minimum.`
+        `Max out tax-advantaged space next (IRA, HSA if eligible) before ` +
+          `adding taxable brokerage investments.`
       );
       break;
-    case "wealth-building":
+    }
+    default: {
       actions.push(
-        `Automate monthly investing of $${money(suggestedInvestAmount(a))} into a diversified portfolio aligned with ${p.riskTolerance} risk — only after retirement is at ${formatPct(a.effectiveRetirement)}%+ and emergency cash is solid.`
+        `Automate retirement, savings, and bill payments on payday so good ` +
+          `months do not depend on willpower.`
       );
       actions.push(
-        `Max out tax-advantaged space next (IRA/HSA if eligible) before adding taxable brokerage investments.`
+        `Block 30 minutes this month to review beneficiaries, insurance ` +
+          `deductibles, and whether the mortgage payment still fits the income tier.`
       );
-      break;
-    case "goal-acceleration":
-      actions.push(goalSpecificAction(a));
-      actions.push(
-        `Create a dedicated sub-account labeled for your goal and auto-transfer a fixed amount each payday so progress toward ${a.goalPhrase} is visible.`
-      );
-      break;
-    default:
-      actions.push(
-        `Automate retirement, savings, and bill payments on payday so good months don't depend on willpower.`
-      );
-      actions.push(
-        `Block 30 minutes this month to review beneficiaries, insurance deductibles, and whether your mortgage payment still fits your income tier.`
-      );
+    }
   }
 
-  actions.push(goalAnchoredAction(a));
-  actions.push(reviewAction(a));
+  actions.push(
+    `Open the ${goalToolLabel(a)} tool with your actual numbers — ` +
+      `the illustration above uses conservative defaults, and your real ` +
+      `account rates and balances will sharpen the picture.`
+  );
+  actions.push(
+    `Set a quarterly calendar reminder to re-run this check-in when income, ` +
+      `rates, or debt change by more than 10%.`
+  );
 
   const unique = [...new Set(actions)];
   return [unique[0], unique[1], unique[2]];
 }
 
-// --- Narrative helpers ---
+// ---------------------------------------------------------------- narrative helpers
 
 function ageOpener(a: ProfileAnalysis): string {
   const p = a.profile;
   if (a.lifeStage === "early-career") {
-    return `As a ${p.age}-year-old early in your earning years, small habit changes now compound dramatically — but only after basics are covered.`;
+    return `At ${p.age}, early in the earning years, small habit changes now compound dramatically — but only after the basics are covered.`;
   }
   if (a.lifeStage === "mid-career") {
-    return `At ${p.age}, you're in the prime window to align income ($${money(p.householdIncome)}) with long-term goals before obligations harden.`;
+    return `At ${p.age}, in the prime window to align income (${money(
+      p.householdIncome
+    )}) with long-term goals before obligations harden.`;
   }
   if (a.lifeStage === "pre-retirement") {
-    return `At ${p.age}, with roughly ${a.yearsToRetirement} years to retirement, tradeoffs between debt, mortgage, and portfolio growth get sharper.`;
+    return `At ${p.age}, with roughly ${a.yearsToRetirement} years to retirement, the tradeoffs between debt, mortgage, and portfolio growth get sharper.`;
   }
-  return `At ${p.age}, capital preservation and predictable income matter as much as growth — every decision should protect the retirement timeline you've set.`;
+  return `At ${p.age}, capital preservation and predictable income matter as much as growth — every decision should protect the retirement timeline already set.`;
 }
 
-function primaryFocusSummary(a: ProfileAnalysis): string {
+function primaryFocusSummary(
+  a: ProfileAnalysis,
+  o: ComputedOutcomes
+): string {
   const p = a.profile;
   switch (a.primaryFocus) {
-    case "emergency-fund":
-      return `I'd prioritize growing cash reserves first: your $${money(p.savingsAmount)} savings cover about ${formatMonths(a.savingsMonths)} of monthly needs, which is ${savingsAdequacyLabel(a.savingsAdequacy)}.`;
-    case "debt-paydown":
-      return `I'd put non-mortgage debt first — $${money(p.otherDebt)} (${formatPct(a.debtToIncome * 100)} of income) is the drag most likely to block progress on everything else.`;
+    case "emergency-fund": {
+      const ef = o.emergencyFund;
+      return (
+        `The numbers point to building cash reserves first. You have ` +
+        `${money(ef.current)} saved, covering about ` +
+        `${formatMonths(ef.monthsCovered)} of expenses — below the ` +
+        `six-month benchmark of ${money(ef.target)}. A ${money(ef.gap)} gap ` +
+        `is the most immediate thing standing between this profile and the ` +
+        `rest of the plan.`
+      );
+    }
+    case "debt-paydown": {
+      const base = `Non-mortgage debt of ${money(p.otherDebt)} ` +
+        `(${formatPct(a.debtToIncome * 100)} of income) is the heaviest drag on cash flow.`;
+      if (!o.debt) return base;
+      return (
+        `${base} As an illustration: the avalanche method clears it in about ` +
+        `${formatMonths(o.debt.avalanche.months)}. ` +
+        `The snowball takes ${formatMonths(o.debt.snowball.months)} and ` +
+        `costs ${money(o.debt.interestSaved)} more — ` +
+        `usually a small premium for the momentum of clearing the first account sooner.`
+      );
+    }
     case "retirement-catch-up":
-      return `I'd focus on lifting retirement savings from ${formatPct(a.effectiveRetirement)} (${formatPct(a.ownContribution)} from you + ${formatPct(a.employerMatch)} match) before chasing aggressive investing.`;
-    case "mortgage-optimization":
-      return `I'd tackle your ${p.mortgageInterestRate}% mortgage on $${money(p.mortgageBalance)} — at this rate, refinancing or extra principal likely beats taxable investing for now.`;
+      return (
+        `Retirement savings of ${formatPct(a.effectiveRetirement)} ` +
+        `(${formatPct(a.ownContribution)} from you + ${formatPct(a.employerMatch)} match) ` +
+        `is below target for age ${p.age}. ` +
+        (a.matchUncaptured
+          ? `The employer match alone is worth ${money(
+              Math.round(p.householdIncome * (a.employerMatch / 100))
+            )}/year — capturing it is the highest-return move in the whole profile.`
+          : `Raising contributions by 1% now and another 1% in six months gets the trajectory moving.`)
+      );
+    case "mortgage-optimization": {
+      if (!o.mortgage?.illustration) {
+        return `Mortgage at ${p.mortgageInterestRate}% on ${money(p.mortgageBalance)} — at this rate, refinancing or extra principal warrants a close look.`;
+      }
+      const m = o.mortgage.illustration;
+      return (
+        `At ${p.mortgageInterestRate}%, a ${money(m.extraMonthly)}/month extra principal ` +
+        `illustration shows a payoff date moving from ${m.payoffWithout} to ${m.payoffWith} — ` +
+        `${m.monthsSaved} months sooner, saving ${money(m.interestSaved)} in interest ` +
+        `(${money(Math.round(m.savedPerExtraDollar * 100))}¢ saved per extra dollar). ` +
+        `That is a guaranteed return, because it is interest never paid.`
+      );
+    }
     case "wealth-building":
-      return `You're positioned to direct surplus cash toward growth: savings are ${savingsAdequacyLabel(a.savingsAdequacy)}, debt is manageable, and retirement is ${a.retirementStatus.replace("-", " ")}.`;
+      return (
+        `The profile is positioned for growth: savings are ` +
+        `${savingsAdequacyLabel(a.savingsAdequacy)}, debt is ` +
+        `${a.debtBurden.replace("-", " ")}, and retirement is ` +
+        `${a.retirementStatus.replace("-", " ")}. The next dollar of surplus ` +
+        `can go toward investing rather than repair.`
+      );
     case "goal-acceleration":
-      return `I'd structure cash flow explicitly around ${a.goalPhrase}, using your ${p.riskTolerance}-risk comfort and current ${formatPct(a.effectiveRetirement)} retirement rate as guardrails.`;
+      return `Cash flow should be structured around ${a.goalPhrase}, using the current ${formatPct(a.effectiveRetirement)} retirement rate and ${p.riskTolerance}-risk comfort as guardrails.`;
     default:
-      return `I'd take a steady, layered approach — shore up weak spots, then line up extra dollars with ${a.goalPhrase}.`;
+      return `A steady, layered approach — shore up the weakest spots, then line up extra dollars with ${a.goalPhrase}.`;
   }
 }
 
-function goalConnection(a: ProfileAnalysis): string {
-  if (a.goalThemes.includes("retirement") && a.primaryFocus !== "retirement-catch-up") {
-    return `That path still supports your retirement-focused goal (${a.goalPhrase}) by reducing shocks that force you to pause contributions.`;
-  }
-  if (a.goalThemes.includes("mortgage-free")) {
-    return `This sequencing keeps you moving toward becoming mortgage-free without starving retirement or emergency cash.`;
-  }
-  if (a.goalThemes.includes("debt-free")) {
-    return `Clearing obstacles in order makes your debt-free goal realistic without derailing housing or retirement.`;
-  }
-  return `Everything below is sequenced so each step moves you closer to ${a.goalPhrase}.`;
-}
-
-function savingsParagraph(a: ProfileAnalysis): string {
-  const p = a.profile;
-  const target = a.emergencyTarget;
-  if (a.savingsAdequacy === "excellent" || a.savingsAdequacy === "strong") {
-    return `Your $${money(p.savingsAmount)} liquid savings (~${formatMonths(a.savingsMonths)} months of income) ${savingsAdequacyLabel(a.savingsAdequacy)} — that's breathing room most households at the ${a.incomeTier} income level don't have.`;
-  }
-  if (a.savingsGap > 0) {
-    return `You have $${money(p.savingsAmount)} saved (~${formatMonths(a.savingsMonths)} months of expenses). For your $${money(p.householdIncome)} household, I'd like to see closer to $${money(target)} before aggressive investing — you're about $${money(a.savingsGap)} short of a 6-month cushion.`;
-  }
-  return `Savings of $${money(p.savingsAmount)} are ${savingsAdequacyLabel(a.savingsAdequacy)} relative to your income and fixed costs.`;
-}
-
-function debtParagraph(a: ProfileAnalysis): string {
-  const p = a.profile;
-  if (a.debtBurden === "none") {
-    return `You reported no non-mortgage debt — that frees cash flow for retirement, your mortgage, or your goal without competing interest charges.`;
-  }
-  const tone =
-    a.debtBurden === "heavy"
-      ? "is the clearest red flag in your profile"
-      : a.debtBurden === "moderate"
-        ? "warrants a deliberate paydown plan"
-        : "is manageable but still worth eliminating methodically";
-  return `Other debt of $${money(p.otherDebt)} (${formatPct(a.debtToIncome * 100)} of $${money(p.householdIncome)} income) ${tone}.`;
-}
-
-function retirementParagraph(a: ProfileAnalysis): string {
-  const p = a.profile;
-  const target = targetRetirementPct(a);
-  if (a.matchUncaptured) {
-    return `You're contributing ${formatPct(a.ownContribution)} while your employer offers up to ${formatPct(a.employerMatch)} match — I'd verify you're not leaving free compensation on the table before other moves.`;
-  }
-  if (a.retirementStatus === "strong" || a.retirementStatus === "on-track") {
-    return `Total retirement savings rate of ${formatPct(a.effectiveRetirement)} (your ${formatPct(a.ownContribution)} + match) is ${a.retirementStatus.replace("-", " ")} for age ${p.age}; maintain or nudge toward ${target}% as income grows.`;
-  }
-  return `At ${formatPct(a.effectiveRetirement)} all-in retirement savings, you're ${a.retirementStatus.replace("-", " ")} for age ${p.age}; I'd aim for roughly ${target}% over the next 12–18 months.`;
-}
-
-function mortgageParagraph(a: ProfileAnalysis): string {
-  const p = a.profile;
-  const ltv =
-    p.householdIncome > 0
-      ? formatPct((p.mortgageBalance / p.householdIncome) * 100)
-      : "—";
-  if (a.mortgageOutlook === "costly") {
-    return `Your ${p.mortgageInterestRate}% rate on a $${money(p.mortgageBalance)} balance (${ltv} of annual income) is expensive in today's market — $${money(p.monthlyMortgagePayment)}/month in housing payment is meaningful at your income level.`;
-  }
-  if (a.mortgageOutlook === "favorable") {
-    return `Your ${p.mortgageInterestRate}% mortgage is relatively low-cost; extra principal is optional compared with maxing tax-advantaged accounts.`;
-  }
-  return `Mortgage: $${money(p.mortgageBalance)} at ${p.mortgageInterestRate}% with $${money(p.monthlyMortgagePayment)}/month payments — worth monitoring, but not necessarily your first lever.`;
-}
-
-function incomeParagraph(a: ProfileAnalysis): string {
-  const p = a.profile;
-  const tierNote: Record<ProfileAnalysis["incomeTier"], string> = {
-    modest: "At this income, small automated amounts matter more than perfect optimization — consistency beats size.",
-    middle: "Your income supports meaningful monthly progress if you automate transfers right after payday.",
-    "upper-middle": "You likely have room for parallel goals once priorities are sequenced — avoid spreading too thin too early.",
-    high: "Higher income raises the stakes for tax-efficient ordering (match, HSA, IRA, then taxable investing).",
-  };
-  return tierNote[a.incomeTier];
-}
-
-function phaseOne(a: ProfileAnalysis): string {
-  switch (a.primaryFocus) {
-    case "emergency-fund":
-      return `Build savings to at least 3 months of expenses ($${money(Math.round(a.emergencyTarget / 2))}) while covering minimum debt and capturing any employer match.`;
-    case "debt-paydown":
-      return `List debts by APR; pay minimums everywhere and send every extra dollar to the highest-rate balance until non-mortgage debt drops below 15% of income.`;
-    case "retirement-catch-up":
-      return a.matchUncaptured
-        ? `Adjust payroll today to capture the full ${formatPct(a.employerMatch)} match — no other move pays that well instantly.`
-        : `Increase deferrals by 1% of salary and confirm investment elections match ${a.profile.riskTolerance} risk.`;
-    case "mortgage-optimization":
-      return `Get two refinance quotes and run break-even math; if you don't refinance, set up one automatic extra principal payment.`;
-    case "wealth-building":
-      return `Confirm 6-month emergency fund, then open automated investing at $${money(suggestedInvestAmount(a))}/month in a diversified allocation.`;
-    case "goal-acceleration":
-      return goalSpecificAction(a);
-    default:
-      return `Automate bills, minimum debt payments, and at least full employer match; track spending for one month to find $200+ for goals.`;
-  }
-}
-
-function phaseTwo(a: ProfileAnalysis): string {
-  const secondary = a.secondaryFocus ?? "stability-first";
-  switch (secondary) {
-    case "emergency-fund":
-      return `Finish the 6-month emergency fund ($${money(a.emergencyTarget)}) before increasing optional investing.`;
-    case "debt-paydown":
-      return `Continue debt snowball until only mortgage remains (if any).`;
-    case "retirement-catch-up":
-      return `Raise total retirement rate toward ${targetRetirementPct(a)}% through bi-annual 1% increases.`;
-    case "mortgage-optimization":
-      return `Apply half of any raise to mortgage principal if rate stays above 6%; otherwise revisit taxable investing.`;
-    case "wealth-building":
-      return `Expand brokerage contributions if cash flow stays comfortable after Phase 1.`;
-    case "goal-acceleration":
-      return `Increase monthly transfers toward ${a.goalPhrase} by 50% of any raise or bonus.`;
-    default:
-      return `Reassess progress; shift extra cash to the next-weakest metric (savings, debt, or retirement).`;
-  }
-}
-
-function phaseThree(a: ProfileAnalysis): string {
-  const p = a.profile;
-  if (a.goalThemes.includes("retirement")) {
-    return `Annual review: project retirement balance at current ${formatPct(a.effectiveRetirement)} savings rate; adjust until on track for ${a.goalPhrase} by your target age.`;
-  }
-  if (a.goalThemes.includes("mortgage-free")) {
-    return `Model mortgage payoff date with optional extra payments; align with ${a.goalPhrase} and don't sacrifice match or emergency fund.`;
-  }
-  if (a.investReadiness === "aggressive" || a.investReadiness === "ready") {
-    return `Rebalance investments yearly, increase savings rate with raises, and revisit whether mortgage prepay still beats after-tax investment returns.`;
-  }
-  return `Build a 12-month habit of increasing savings rate 1% per year and revisiting insurance, estate beneficiaries, and goal timeline.`;
-}
-
-function allocationGuidance(a: ProfileAnalysis): string {
-  const p = a.profile;
-  if (a.surplusCapacity === "tight") {
-    return `With tight cash flow, use a simple rule: essentials → employer match → $${money(Math.max(50, Math.round(a.savingsGap / 24)))}/mo to savings → highest-rate debt — only then optional mortgage or investing.`;
-  }
-  if (a.primaryFocus === "mortgage-optimization" && a.retirementStatus !== "behind") {
-    return `Split extra cash 60/40 between mortgage principal and retirement until the rate is below 6% or refinanced, then shift toward investing given your ${p.riskTolerance} tolerance.`;
-  }
-  if (a.investReadiness === "aggressive") {
-    return `After match and 6-month cash: ~70% to diversified investing, ~30% to goal-specific savings or optional mortgage prepay — adjust down if markets make you uncomfortable.`;
-  }
-  if (a.investReadiness === "ready") {
-    return `After basics: ~50% retirement/tax-advantaged, ~30% goal account, ~20% brokerage or mortgage prepay depending on whether your ${p.mortgageInterestRate}% rate feels painful.`;
-  }
-  return `Until savings and debt metrics improve, put 100% of extra cash to cushion + debt + match — investing can wait without jeopardizing ${a.goalPhrase}.`;
-}
-
-function goalSpecificAction(a: ProfileAnalysis): string {
-  const p = a.profile;
-  if (a.goalThemes.includes("mortgage-free")) {
-    return `Calculate how one extra $${money(p.monthlyMortgagePayment)} payment per year shifts your payoff date on $${money(p.mortgageBalance)} — that's the clearest path toward ${a.goalPhrase}.`;
-  }
-  if (a.goalThemes.includes("retirement")) {
-    return `Use an online retirement projector with age ${p.age}, income $${money(p.householdIncome)}, and ${formatPct(a.effectiveRetirement)} savings rate to see if ${a.goalPhrase} is realistic — adjust deferrals quarterly.`;
-  }
-  if (a.goalThemes.includes("debt-free")) {
-    return `Pick a debt-free date and divide $${money(p.otherDebt)} by remaining months — that's your monthly target payment above minimums.`;
-  }
-  if (a.goalThemes.includes("investing")) {
-    return `Open or review a brokerage account with an asset mix matching ${p.riskTolerance} risk only after emergency fund and match are handled.`;
-  }
-  return `Break ${a.goalPhrase} into a monthly dollar target based on your timeline and automate that transfer on payday.`;
-}
-
-function goalAnchoredAction(a: ProfileAnalysis): string {
-  return `Write your goal — ${a.goalPhrase} — at the top of your budget spreadsheet and tag every transfer so you can see momentum monthly.`;
-}
-
-function reviewAction(a: ProfileAnalysis): string {
-  return `Set a quarterly calendar reminder to re-run this check-in when income, rates, or debt change by more than 10%.`;
-}
-
-function targetRetirementPct(a: ProfileAnalysis): number {
-  const age = a.profile.age;
-  if (age < 35) return 15;
-  if (age < 45) return 18;
-  if (age < 55) return 20;
-  return 22;
-}
-
-function suggestedInvestAmount(a: ProfileAnalysis): number {
-  const monthly = a.profile.householdIncome / 12;
-  const base = monthly * 0.08;
-  if (a.incomeTier === "modest") return Math.round(Math.min(base, 200));
-  if (a.incomeTier === "middle") return Math.round(Math.min(base, 600));
-  return Math.round(Math.min(base, 1500));
-}
+// ---------------------------------------------------------------- helpers
 
 function money(n: number): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -459,9 +667,39 @@ function formatPct(n: number): string {
   return `${rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)}%`;
 }
 
-function formatMonths(m: number): string {
-  const rounded = Math.round(m * 10) / 10;
-  if (rounded < 1) return "less than one month";
-  if (rounded === 1) return "about one month";
-  return `about ${rounded} months`;
+function formatMonths(total: number): string {
+  const y = Math.floor(total / 12);
+  const m = total % 12;
+  const parts: string[] = [];
+  if (y > 0) parts.push(`${y} year${y > 1 ? "s" : ""}`);
+  if (m > 0 || parts.length === 0)
+    parts.push(`${m} month${m > 1 ? "s" : ""}`);
+  return parts.join(", ");
+}
+
+function payoffLabel(months: number): string {
+  const now = new Date();
+  const target = new Date(now.getFullYear(), now.getMonth() + Math.round(months), 1);
+  return target.toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function suggestedInvestAmount(a: ProfileAnalysis): number {
+  const monthly = a.profile.householdIncome / 12;
+  const base = monthly * 0.08;
+  if (a.incomeTier === "modest") return Math.round(Math.min(base, 200));
+  if (a.incomeTier === "middle") return Math.round(Math.min(base, 600));
+  return Math.round(Math.min(base, 1500));
+}
+
+function goalToolLabel(a: ProfileAnalysis): string {
+  if (a.goalThemes.includes("mortgage-free") || a.primaryFocus === "mortgage-optimization") {
+    return "Mortgage Deep Dive";
+  }
+  if (a.goalThemes.includes("debt-free") || a.primaryFocus === "debt-paydown") {
+    return "Debt Payoff";
+  }
+  return "Mortgage Deep Dive";
 }

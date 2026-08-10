@@ -1,14 +1,17 @@
-import SiteHeader from "@/components/SiteHeader";
+import type { Metadata } from "next";
+import Layout from "@/components/Layout";
 import RecommendationClient from "./RecommendationClient";
+
+export const metadata: Metadata = {
+  title: "Quick Check — Get a plan from your numbers",
+  description:
+    "Fill a one-page profile and get an illustrated financial plan. Every figure is computed from your numbers — no advice, just arithmetic.",
+};
 
 export default function RecommendationPage() {
   return (
-    <div className="flex min-h-full flex-col bg-slate-100">
-      <SiteHeader showBack />
+    <Layout variant="narrow">
       <RecommendationClient />
-      <footer className="mt-auto border-t border-slate-200 py-6 text-center text-xs text-slate-500">
-        For educational purposes only — not financial advice.
-      </footer>
-    </div>
+    </Layout>
   );
 }
