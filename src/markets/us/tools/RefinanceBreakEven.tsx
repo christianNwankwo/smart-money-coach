@@ -4,7 +4,7 @@ import { analyzeRefinance } from "@/lib/finance";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import LineChart, { downsample } from "@/components/charts/LineChart";
-import { ResultRow, StatTile, fieldDef, fmt } from "./shared";
+import { ResultRow, StatTile, fieldDef, fmt } from "@/components/tools/shared";
 
 function readParam(params: URLSearchParams, key: string): number | null {
   const raw = params.get(key);

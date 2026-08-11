@@ -4,7 +4,7 @@ import { computePiti, buildSchedule, comparePrepayment, analyzeRefinance } from 
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import LineChart, { downsample } from "@/components/charts/LineChart";
-import { ResultRow, StatTile, fieldDef, fmt } from "./shared";
+import { ResultRow, StatTile, fieldDef, fmt } from "@/components/tools/shared";
 
 export default function MortgageDeepDive() {
   const [homePrice, setHomePrice] = useState(400_000);

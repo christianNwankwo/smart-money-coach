@@ -4,7 +4,7 @@ import { compareStrategies } from "@/lib/finance";
 import type { Debt } from "@/lib/finance";
 import { useMemo, useState } from "react";
 import LineChart, { downsample } from "@/components/charts/LineChart";
-import { fieldDef, fmt } from "./shared";
+import { fieldDef, fmt } from "@/components/tools/shared";
 
 let debtId = 0;
 function nextId() {
