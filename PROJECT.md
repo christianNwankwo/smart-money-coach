@@ -4,10 +4,27 @@ Financial calculators that show their arithmetic. Every figure is computed in th
 browser from numbers the visitor types — there is no backend, nothing is
 uploaded, and the site is a folder of static HTML.
 
-The differentiator is not the calculators, which are commodity, but that the
-maths is **a tested library rather than a formula inlined into a form**, and that
-each market gets the tools its readers actually need instead of a translated copy
-of the US set.
+## The goal
+
+**A site people find genuinely useful, not another basic calculator.** That bar
+is not met by correctness alone. Mortgage calculators are commodity — Bankrate,
+NerdWallet and every lender rank for them — and "the arithmetic is tested" is a
+claim a visitor can neither see nor verify.
+
+What is actually differentiated here is the *content*: that PMI has three
+cancellation dates and prepaying moves none of them; that the break-even lenders
+quote flatters any refinance that re-extends the term; that avalanche and
+snowball differ by an amount you can weigh rather than a rule to obey. The
+engineering exists to make that content trustworthy. It is not itself the
+product.
+
+Two implications, held deliberately:
+
+- **Lead with the insight, not the form.** A tool page that opens with nine
+  inputs is a utility. One that opens with "most people pay PMI for years longer
+  than they have to" is a reason to arrive.
+- **Each market gets the tools its readers need**, not a translated copy of the
+  US set. See *Markets*.
 
 ---
 
@@ -17,7 +34,7 @@ of the US set.
 | --- | --- |
 | Stack | Next.js 16 (App Router, static export) · TypeScript · Tailwind v4 |
 | Markets | US (3 tools) · Nigeria (4 tools) |
-| Tests | 7 suites, ~395 checks, all passing |
+| Tests | 7 suites, 402 checks, all passing |
 | Deployed | **No** — runs locally only |
 | Repo | `christianNwankwo/smart-money-coach` |
 
@@ -73,6 +90,23 @@ npm run typecheck
 Both markets build into `out/`, so `npm run clean` runs first — otherwise the
 previous market's chunks are left in the deployed directory.
 
+**Building one market while `npm run dev` serves the other silently switches
+it.** `build:ng` rewrites `src/markets/active.ts`, which is a source file the dev
+server watches, so localhost:3000 hot-reloads into Nigeria mid-session. Restore
+it with:
+
+```bash
+node scripts/active-market.mjs     # back to US (the default)
+```
+
+To run both at once: build Nigeria, serve `out/` on its own port, then restore
+`active.ts` before touching the dev server.
+
+```bash
+npm run build:ng && npx serve out -l 4174 &
+node scripts/active-market.mjs
+```
+
 ---
 
 ## Architecture
@@ -86,14 +120,30 @@ src/
     refinance.ts        break-even, both kinds
     piti.ts             PITI and PMI (US Homeowners Protection Act)
     savings.ts          inflation, goals, emergency funds, contributions
+  lib/                Everything else non-visual
+    recommendation.ts       Quick Check prose. US-only — see hasQuickCheck.
+    finance-recommendation.ts  Runs lib/finance for the figures it cites
+    profile-analysis.ts     Classifies a profile into tiers
+    storage.ts              sessionStorage for the Quick Check profile
   markets/
     types.ts          MarketConfig + registry types — the contract a market fulfils
     us.ts  ng.ts      currency, income tiers, retirement system, capabilities
     us/  ng/          registry.ts, tool-components.ts, QuickCheck.tsx, tools/
     active.ts         GENERATED — points at one market
-  components/         Layout, ToolPage, charts, ErrorBoundary, MarketContext
+  components/
+    Layout.tsx          header, footer, market disclaimer
+    ToolPage.tsx        tool chrome: how-to, FAQ, related rail, JSON-LD
+    FinancialForm.tsx   Quick Check input form
+    MarketContext.tsx   active market config to client components
+    ErrorBoundary.tsx   stops a tool crash whitescreening the page
+    ToolIcon.tsx        home-grid icons
+    charts/LineChart.tsx    the only chart component
+    tools/shared.tsx        StatTile, ResultRow, fieldDef, useFormat
   app/                Routes. Everything derives from the registry.
 ```
+
+This tree is exhaustive on purpose: diffing it against `ls` is what surfaced two
+dead components that had been reported as deleted. Keep it that way.
 
 **The calculation library never branches on market.** It takes a balance, a rate
 and a term and does arithmetic. What differs per market — the currency, realistic
@@ -330,6 +380,50 @@ returns zero whether the link is present or not — the US page, which *does* li
 there, also scored zero. Any grep asserting absence needs a positive control:
 run it against the case that should match first.
 
+**Dead components reported as deleted, still on disk.** `CoachText.tsx` and
+`SiteHeader.tsx` were described as removed during the redesign — `CoachText` had
+been inlined into the Quick Check panel and nothing referenced `SiteHeader` at
+all. Both sat in `src/components/` for several commits afterwards. Found by
+diffing the architecture tree in this file against `ls`, which is the only reason
+to keep the tree here accurate.
+
+---
+
+## Honest assessment
+
+Recorded because the gap between how solid the engineering is and how unproven
+the product is, is the most useful thing to know before adding to this.
+
+**The engineering is ahead of the product.** The finance library is genuinely
+good — correct rounding conventions, statutory PMI rules, differential tests
+against closed-form algebra. None of that is visible to a visitor, and none of it
+is a reason for anyone to arrive. The site currently looks like every other
+mortgage calculator.
+
+**Nothing here has met a user.** No deployment, no analytics, no search
+impressions. Every claim about what people want — including the entire Nigerian
+tool selection — is reasoning, not evidence.
+
+**The Nigerian thesis is a guess.** The argument that Nigerians are not looking
+for mortgage analysis, and are looking for inflation-aware goal saving and loan-
+app payoff, is plausible and was reasoned from general knowledge. It has not been
+checked against search data, forums, or a single real person. Validate it before
+building more on top of it.
+
+**Quick Check is the weakest component and a candidate for removal.** Roughly 700
+lines of string templating producing long prose that duplicates what the tools
+show better. Its tests assert sections have content, not that the content is
+correct — close to untestable by construction. It is also the only US-only
+feature forcing capability-gating into the market system.
+
+**Search over four tools is decoration.** `searchTools()` is implemented and
+tested; it filters a list short enough to read without scrolling.
+
+**The charts are adequate, not good.** One line-chart component. The Mortgage
+tool plots balance over time, but the view that would actually change behaviour
+is the principal-versus-interest split in the early years — seeing that most of
+an early payment is interest is the moment prepayment makes sense.
+
 ---
 
 ## Known gaps
@@ -352,3 +446,22 @@ DOM-based test could have caught — both classes of bug are live here.
 versioning beyond a cache name; bumping `CACHE` invalidates everything, which is
 blunt but correct. The toolbox project found its own service worker had never
 once installed in production — that failure mode is only visible when deployed.
+
+---
+
+## Next, in order
+
+Not more tools. The constraint is evidence, not surface area.
+
+1. **Deploy it.** It is a static folder; this is a day of work. Every claim above
+   is speculation until something is in front of someone, and Search Console
+   data about *these pages* beats any amount of reasoning about the market.
+2. **Lead with the insight on at least one page.** Open Mortgage Deep Dive with
+   the PMI problem stated in plain language, then the calculator. That is the
+   difference between a utility and a reason to arrive — and it is testable
+   against the deployed version.
+3. **Validate the Nigerian thesis** before the housing tool or an NG
+   recommendation engine.
+4. **Then browser tests** — once there is something deployed worth protecting.
+   Mirror the toolbox harness: CDP-driven, real files in, produced output read
+   back in Node rather than trusting the UI's own read-out.
