@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import FinancialForm from "@/components/FinancialForm";
 import { generateRecommendation } from "@/lib/recommendation";
-import { loadProfile } from "@/lib/storage";
+import { clearProfile, loadProfile } from "@/lib/storage";
 import type { FinancialProfile, RecommendationResult } from "@/types/financial";
 
 function CoachText({ children, className = "" }: { children: string; className?: string }) {
@@ -57,21 +57,30 @@ export default function RecommendationClient() {
     );
   }
 
+  // No profile yet: collect one here rather than sending the visitor away to a
+  // form that lives somewhere else. The whole flow is one page.
   if (!profile || !result) {
     return (
-      <div className="py-16 text-center">
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">
-          No profile found
-        </h1>
-        <p className="mt-2 text-slate-600 dark:text-slate-400">
-          Complete the form on the homepage to get your illustrated plan.
+      <div>
+        <p className="text-sm font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+          Quick Check
         </p>
-        <Link
-          href="/"
-          className="mt-6 inline-block rounded-xl bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-500"
-        >
-          Go to homepage
-        </Link>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
+          Tell us about your finances
+        </h1>
+        <p className="mt-3 max-w-xl text-slate-500 dark:text-slate-400">
+          Every figure in the plan is computed from what you enter here. Nothing
+          is uploaded — the numbers stay in this browser tab and are gone when
+          you close it.
+        </p>
+        <div className="mt-8">
+          <FinancialForm
+            onComplete={(p) => {
+              setProfile(p);
+              setResult(generateRecommendation(p));
+            }}
+          />
+        </div>
       </div>
     );
   }
@@ -136,6 +145,17 @@ export default function RecommendationClient() {
       </section>
 
       <ProfileSnapshot profile={profile} />
+
+      <button
+        onClick={() => {
+          clearProfile();
+          setProfile(null);
+          setResult(null);
+        }}
+        className="mt-4 text-sm font-medium text-slate-500 underline underline-offset-4 transition hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+      >
+        Start over with different numbers
+      </button>
     </div>
   );
 }

@@ -31,6 +31,9 @@ export const ngMarket: MarketConfig = {
   },
   incomeTiers: [1_200_000, 5_000_000, 15_000_000],
   emergencyFundTargetMonths: 3,
+  // No Nigerian recommendation engine exists yet. The US one reasons about
+  // 401(k) matching, PMI and mortgage prepayment — none of which apply here.
+  hasQuickCheck: false,
   disclaimer:
     "These are arithmetic illustrations, not advice. They use only the " +
     "numbers you typed — not your employment status, family obligations, or " +

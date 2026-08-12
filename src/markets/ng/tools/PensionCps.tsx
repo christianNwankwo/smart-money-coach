@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { projectContributions } from "@/lib/finance/savings";
 import { useFormat, fieldDef, StatTile } from "@/components/tools/shared";
 
 export default function PensionCps() {
@@ -13,29 +14,30 @@ export default function PensionCps() {
   const [inflationPct, setInflationPct] = useState(15);
 
   const result = useMemo(() => {
-    const monthlyContribution = Math.round(monthlySalary * (contributionPct / 100));
+    const monthlyContribution = Math.round(
+      monthlySalary * (contributionPct / 100)
+    );
     const months = yearsToRetirement * 12;
-    const monthlyReturn = expectedReturnPct / 100 / 12;
-    // Future value of existing balance + annuity of monthly contributions
-    let balance = currentBalance;
-    let totalContributions = 0;
-    for (let m = 0; m < months; m++) {
-      balance = Math.round(balance * (1 + monthlyReturn) + monthlyContribution);
-      totalContributions += monthlyContribution;
+    try {
+      const projection = projectContributions({
+        openingBalance: currentBalance,
+        monthlyContribution,
+        months,
+        annualReturnPct: expectedReturnPct,
+        annualInflationPct: inflationPct,
+      });
+      return { ...projection, monthlyContribution, months };
+    } catch {
+      return null;
     }
-    const investmentGains = balance - currentBalance - totalContributions;
-    // Discount to today's naira
-    const monthlyInflation = inflationPct / 100 / 12;
-    const todayValue = Math.round(balance / Math.pow(1 + monthlyInflation, months));
-    return {
-      monthlyContribution,
-      projectedBalance: balance,
-      totalContributions,
-      investmentGains,
-      todayValue,
-      months,
-    };
-  }, [monthlySalary, contributionPct, currentBalance, yearsToRetirement, expectedReturnPct, inflationPct]);
+  }, [
+    monthlySalary,
+    contributionPct,
+    currentBalance,
+    yearsToRetirement,
+    expectedReturnPct,
+    inflationPct,
+  ]);
 
   return (
     <div>
@@ -93,41 +95,48 @@ export default function PensionCps() {
         ))}
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile
-          label="Monthly contribution"
-          value={f.money(result.monthlyContribution)}
-          detail={`${contributionPct}% of salary`}
-        />
-        <StatTile
-          label="Projected balance"
-          value={f.money(result.projectedBalance)}
-          detail={`at retirement`}
-        />
-        <StatTile
-          label="In today's naira"
-          value={f.money(result.todayValue)}
-          detail={`after ${inflationPct}% inflation`}
-        />
-        <StatTile
-          label="Total you put in"
-          value={f.money(result.totalContributions)}
-          detail={`${f.plain(result.months)} months`}
-        />
-      </div>
+      {result && (
+        <>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatTile
+              label="Monthly contribution"
+              value={f.money(result.monthlyContribution)}
+              detail={`${contributionPct}% of salary`}
+            />
+            <StatTile
+              label="Projected balance"
+              value={f.money(result.finalBalance)}
+              detail="at retirement"
+            />
+            <StatTile
+              label="In today's naira"
+              value={f.money(result.balanceInTodaysMoney)}
+              detail={`after ${inflationPct}% inflation`}
+            />
+            <StatTile
+              label="Total you put in"
+              value={f.money(result.totalContributed)}
+              detail={`over ${f.plain(result.months)} months`}
+            />
+          </div>
 
-      <div className="mt-6 rounded-lg border border-slate-200 bg-white p-4 text-sm dark:border-slate-700 dark:bg-slate-800">
-        <p className="text-slate-600 dark:text-slate-400">
-          <strong className="text-slate-800 dark:text-slate-200">
-            What this projection means:
-          </strong>{" "}
-          If you contribute {f.money(result.monthlyContribution)}/month for{' '}
-          {yearsToRetirement} years at {expectedReturnPct}% return, your RSA could grow to{' '}
-          {f.money(result.projectedBalance)}. But in today's naira, at {inflationPct}% inflation,
-          that is worth about {f.money(result.todayValue)}. The gap between those two
-          numbers is the cost of inflation — not a flaw in the pension.
-        </p>
-      </div>
+          <div className="mt-6 rounded-lg border border-slate-200 bg-white p-4 text-sm dark:border-slate-700 dark:bg-slate-800">
+            <p className="text-slate-600 dark:text-slate-400">
+              <strong className="text-slate-800 dark:text-slate-200">
+                What this projection means:
+              </strong>{" "}
+              Contributing {f.money(result.monthlyContribution)}/month for{" "}
+              {yearsToRetirement} years at {expectedReturnPct}% could grow the
+              account to {f.money(result.finalBalance)} — of which{" "}
+              {f.money(result.investmentGrowth)} is investment growth rather than
+              your own contributions. In today&apos;s naira, at {inflationPct}%
+              inflation, that balance is worth about{" "}
+              {f.money(result.balanceInTodaysMoney)}. The gap between those two
+              figures is what inflation takes, not a flaw in the pension.
+            </p>
+          </div>
+        </>
+      )}
     </div>
   );
 }

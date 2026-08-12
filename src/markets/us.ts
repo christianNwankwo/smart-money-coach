@@ -30,6 +30,7 @@ export const usMarket: MarketConfig = {
   },
   incomeTiers: [60_000, 120_000, 250_000],
   emergencyFundTargetMonths: 6,
+  hasQuickCheck: true,
   disclaimer:
     "These are arithmetic results, not a recommendation. They use only the " +
     "numbers you typed — not your tax situation, job security, health, or " +

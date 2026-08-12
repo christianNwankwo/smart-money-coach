@@ -7,21 +7,44 @@
  * one of them can be run on its own while working on it:
  *
  *   node tests/amortization.test.mjs
+ *
+ * Suites are DISCOVERED from disk rather than listed here. A hardcoded list is
+ * one edit away from silently dropping coverage — `savings.test.mjs` was written
+ * with 55 checks and never added, so it sat in the directory not running while
+ * `npm test` reported everything passing. Anything matching `*.test.mjs` runs.
  */
 import { spawnSync } from 'node:child_process'
+import { readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const TESTS = fileURLToPath(new URL('.', import.meta.url))
 
-const SUITES = [
+// Fast unit suites first so a common failure surfaces quickly. Anything not
+// named here still runs, alphabetically, after the ones that are.
+const PREFERRED_ORDER = [
   'amortization.test.mjs',
+  'savings.test.mjs',
   'debt-payoff.test.mjs',
   'refinance.test.mjs',
   'piti.test.mjs',
   'registry.test.mjs',
   'recommendation.test.mjs',
 ]
+
+const discovered = readdirSync(TESTS)
+  .filter((f) => f.endsWith('.test.mjs'))
+  .sort()
+
+const SUITES = [
+  ...PREFERRED_ORDER.filter((s) => discovered.includes(s)),
+  ...discovered.filter((s) => !PREFERRED_ORDER.includes(s)),
+]
+
+const missing = PREFERRED_ORDER.filter((s) => !discovered.includes(s))
+if (missing.length) {
+  console.log(`note: listed but not on disk: ${missing.join(', ')}\n`)
+}
 
 const results = []
 for (const suite of SUITES) {

@@ -6,11 +6,21 @@ import { saveProfile } from "@/lib/storage";
 import type { FinancialProfile, RiskTolerance } from "@/types/financial";
 
 const inputClass =
-  "w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-900 shadow-sm transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20";
+  "w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-900 shadow-sm transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white";
 
-const labelClass = "mb-1.5 block text-sm font-medium text-slate-700";
+const labelClass =
+  "mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300";
 
-export default function FinancialForm() {
+/**
+ * `onComplete` lets the form be used in place — the recommendation page renders
+ * it and re-reads the profile rather than navigating. Without a callback it
+ * falls back to navigating, which is what a standalone entry point wants.
+ */
+export default function FinancialForm({
+  onComplete,
+}: {
+  onComplete?: (profile: FinancialProfile) => void;
+} = {}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
@@ -27,13 +37,14 @@ export default function FinancialForm() {
     }
 
     saveProfile(profile);
-    router.push("/recommendation");
+    if (onComplete) onComplete(profile);
+    else router.push("/recommendation");
   }
 
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-2xl border border-slate-200/80 bg-white/90 p-6 shadow-xl shadow-slate-200/50 backdrop-blur sm:p-8"
+      className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8"
     >
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Age" name="age" type="number" min={18} max={100} required />
@@ -136,7 +147,7 @@ export default function FinancialForm() {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
           {error}
         </p>
       )}

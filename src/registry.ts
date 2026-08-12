@@ -1,14 +1,17 @@
 /**
- * Active market registry — re-exports from the market identified by
- * `NEXT_PUBLIC_MARKET` at build time.
+ * The active market's registry.
+ *
+ * Re-exported from the generated `@/markets/active` barrel so only one market's
+ * tools are reachable from the bundle — see scripts/active-market.mjs.
  */
-import { registry as us } from "@/markets/us/registry";
-import { registry as ng } from "@/markets/ng/registry";
-
-const MARKET = (process.env.NEXT_PUBLIC_MARKET ?? "us") as "us" | "ng";
-const registries = { us, ng };
-const reg = registries[MARKET];
-
-export const { tools, categories, getTool, relatedTools, searchTools, toolsBySlug, toolsInCategory } = reg;
+export {
+  tools,
+  categories,
+  getTool,
+  relatedTools,
+  searchTools,
+  toolsBySlug,
+  toolsInCategory,
+} from "@/markets/active";
 
 export type { Tool, Category, CategoryId, FaqItem } from "@/markets/types";

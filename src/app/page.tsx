@@ -5,6 +5,7 @@ import { useState } from "react";
 import Layout from "@/components/Layout";
 import { DebtIcon, MortgageIcon, RefinanceIcon } from "@/components/ToolIcon";
 import { tools, categories, searchTools } from "@/registry";
+import { marketConfig } from "@/market";
 
 const CAT_ICONS: Record<string, React.ComponentType> = {
   mortgage: MortgageIcon,
@@ -134,7 +135,8 @@ export default function Home() {
         );
       })}
 
-      {/* Quick Check card */}
+      {/* Quick Check card — only where the market has a recommendation engine */}
+      {marketConfig.hasQuickCheck && (
       <section className="mt-10 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -154,6 +156,7 @@ export default function Home() {
           </Link>
         </div>
       </section>
+      )}
 
       {/* Trust bar */}
       <section className="mt-16 border-t border-slate-200 pt-10 dark:border-slate-800">

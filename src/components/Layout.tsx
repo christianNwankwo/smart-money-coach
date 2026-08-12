@@ -37,12 +37,14 @@ export default function Layout({
                   : tool.title}
               </Link>
             ))}
-            <Link
-              href="/recommendation"
-              className="rounded-full bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-500"
-            >
-              Quick Check
-            </Link>
+            {marketConfig.hasQuickCheck && (
+              <Link
+                href="/recommendation"
+                className="rounded-full bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-500"
+              >
+                Quick Check
+              </Link>
+            )}
           </nav>
         </div>
       </header>

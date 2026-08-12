@@ -108,45 +108,42 @@ export default function MortgageDeepDive() {
       {/* Input grid */}
       <div className="grid gap-4 sm:grid-cols-3">
         {[
-          fieldDef("Home price", "$", "homePrice", homePrice, setHomePrice, {
+          fieldDef("Home price", "homePrice", homePrice, setHomePrice, {
             min: 10_000,
             step: 5_000,
           }),
-          fieldDef("Down payment", "$", "down", downPayment, setDownPayment, {
+          fieldDef("Down payment", "down", downPayment, setDownPayment, {
             min: 0,
             step: 5_000,
           }),
-          fieldDef("Rate (%)", "", "rate", rate, setRate, { min: 0, max: 25, step: 0.125 }),
-          fieldDef("Term (months)", "", "term", termMonths, setTermMonths, {
+          fieldDef("Rate (%)", "rate", rate, setRate, { min: 0, max: 25, step: 0.125 }),
+          fieldDef("Term (months)", "term", termMonths, setTermMonths, {
             min: 12,
             max: 480,
             step: 12,
           }),
-          fieldDef("Property tax/yr", "$", "tax", propertyTax, setPropertyTax, {
+          fieldDef("Property tax/yr", "tax", propertyTax, setPropertyTax, {
             min: 0,
             step: 500,
           }),
-          fieldDef("Insurance/yr", "$", "ins", insurance, setInsurance, {
+          fieldDef("Insurance/yr", "ins", insurance, setInsurance, {
             min: 0,
             step: 100,
           }),
-          fieldDef("HOA/mo", "$", "hoa", hoa, setHoa, { min: 0, step: 25 }),
-          fieldDef("PMI rate (%)", "", "pmi", pmiRate, setPmiRate, {
+          fieldDef("HOA/mo", "hoa", hoa, setHoa, { min: 0, step: 25 }),
+          fieldDef("PMI rate (%)", "pmi", pmiRate, setPmiRate, {
             min: 0,
             max: 3,
             step: 0.05,
           }),
-          fieldDef("Extra principal/mo", "$", "extra", extraMonthly, setExtraMonthly, {
+          fieldDef("Extra principal/mo", "extra", extraMonthly, setExtraMonthly, {
             min: 0,
             step: 50,
           }),
         ].map((f) => (
           <label key={f.key} className="block">
-            <span className="text-xs font-medium text-slate-500">
-              {f.label}{" "}
-              {f.unit === "$" && (
-                <span className="tabular-nums text-slate-400">$</span>
-              )}
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              {f.label}
             </span>
             <input
               type="number"

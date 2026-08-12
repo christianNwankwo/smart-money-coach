@@ -110,31 +110,31 @@ export default function RefinanceBreakEven() {
       {/* Input grid */}
       <div className="grid gap-4 sm:grid-cols-3">
         {[
-          fieldDef("Current balance", "$", "bal", balance, setBalance, {
+          fieldDef("Current balance", "bal", balance, setBalance, {
             min: 0,
             step: 5_000,
           }),
-          fieldDef("Current rate (%)", "", "crate", currentRate, setCurrentRate, {
+          fieldDef("Current rate (%)", "crate", currentRate, setCurrentRate, {
             min: 0,
             max: 25,
             step: 0.125,
           }),
-          fieldDef("Months left", "", "left", remainingMonths, setRemainingMonths, {
+          fieldDef("Months left", "left", remainingMonths, setRemainingMonths, {
             min: 1,
             max: 480,
             step: 12,
           }),
-          fieldDef("New rate (%)", "", "nrate", newRate, setNewRate, {
+          fieldDef("New rate (%)", "nrate", newRate, setNewRate, {
             min: 0,
             max: 25,
             step: 0.125,
           }),
-          fieldDef("New term", "", "nterm", newTerm, setNewTerm, {
+          fieldDef("New term", "nterm", newTerm, setNewTerm, {
             min: 12,
             max: 480,
             step: 12,
           }),
-          fieldDef("Closing costs", "$", "costs", closingCosts, setClosingCosts, {
+          fieldDef("Closing costs", "costs", closingCosts, setClosingCosts, {
             min: 0,
             step: 500,
           }),

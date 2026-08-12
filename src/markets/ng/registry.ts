@@ -28,13 +28,10 @@ export const categories: Category[] = [
       "What to put aside for a goal, how long it takes, and what a safe cushion looks like in Naira.",
     accent: "bg-emerald-500/10 text-emerald-700",
   },
-  {
-    id: "housing",
-    label: "Housing",
-    blurb:
-      "Building incrementally — the most common path to home ownership in Nigeria.",
-    accent: "bg-amber-500/10 text-amber-700",
-  },
+  // A "Housing" category belongs here — incremental building is the dominant
+  // path to ownership in Nigeria — but the tool to fill it does not exist yet,
+  // and an empty category renders a heading with nothing under it. Add the
+  // category back with the tool, not before it.
   {
     id: "pension",
     label: "Pension",

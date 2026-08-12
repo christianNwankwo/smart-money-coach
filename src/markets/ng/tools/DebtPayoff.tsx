@@ -1,7 +1,10 @@
 "use client";
 
-import { compareStrategies } from "@/lib/finance";
-import type { Debt } from "@/lib/finance";
+// Imported from the module rather than the `@/lib/finance` barrel: the barrel
+// re-exports every calculator, so pulling one function through it drags the
+// mortgage and refinance engines into a market that has neither.
+import { compareStrategies } from "@/lib/finance/debt-payoff";
+import type { Debt } from "@/lib/finance/debt-payoff";
 import { useMemo, useState } from "react";
 import LineChart, { downsample } from "@/components/charts/LineChart";
 import { useFormat, fieldDef } from "@/components/tools/shared";

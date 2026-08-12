@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { planEmergencyFund } from "@/lib/finance/savings";
 import { useFormat, fieldDef, StatTile } from "@/components/tools/shared";
 
 export default function EmergencyFund() {
@@ -11,10 +12,16 @@ export default function EmergencyFund() {
   const [monthlySavings, setMonthlySavings] = useState(30_000);
 
   const result = useMemo(() => {
-    const target = monthlyExpenses * targetMonths;
-    const gap = Math.max(0, target - currentSavings);
-    const monthsToReach = monthlySavings > 0 ? Math.ceil(gap / monthlySavings) : 0;
-    return { target, gap, monthsToReach };
+    try {
+      return planEmergencyFund({
+        monthlyExpenses,
+        targetMonths,
+        currentSavings,
+        monthlySavings,
+      });
+    } catch {
+      return null;
+    }
   }, [monthlyExpenses, targetMonths, currentSavings, monthlySavings]);
 
   return (
@@ -62,38 +69,52 @@ export default function EmergencyFund() {
         ))}
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        <StatTile
-          label="Your target"
-          value={f.money(result.target)}
-          detail={`${targetMonths} months at ${f.money(monthlyExpenses)}/mo`}
-        />
-        <StatTile
-          label="Still needed"
-          value={f.money(result.gap)}
-          detail={result.gap === 0 ? "Already there" : "Gap to close"}
-        />
-        <StatTile
-          label="Time to reach"
-          value={
-            result.monthsToReach === 0
-              ? "Already funded"
-              : `${result.monthsToReach} months`
-          }
-          detail={
-            result.monthsToReach > 0
-              ? `at ${f.money(monthlySavings)}/mo`
-              : ""
-          }
-        />
-      </div>
+      {result && (
+        <>
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            <StatTile
+              label="Your target"
+              value={f.money(result.target)}
+              detail={`${targetMonths} months at ${f.money(monthlyExpenses)}/mo`}
+            />
+            <StatTile
+              label="Still needed"
+              value={f.money(result.gap)}
+              detail={
+                result.fullyFunded
+                  ? `covers ${result.monthsCovered.toFixed(1)} months`
+                  : "Gap to close"
+              }
+            />
+            <StatTile
+              label="Time to reach"
+              value={
+                result.fullyFunded
+                  ? "Already funded"
+                  : result.monthsToTarget === null
+                    ? "Never"
+                    : `${result.monthsToTarget} months`
+              }
+              detail={
+                result.fullyFunded
+                  ? ""
+                  : result.monthsToTarget === null
+                    ? "nothing is being saved each month"
+                    : `at ${f.money(monthlySavings)}/mo`
+              }
+            />
+          </div>
 
-      {result.gap === 0 && (
-        <div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm dark:border-emerald-800 dark:bg-emerald-950/30">
-          <p className="font-medium text-emerald-900 dark:text-emerald-300">
-            Your emergency fund is fully funded at {f.money(result.target)}.
-          </p>
-        </div>
+          {result.fullyFunded && (
+            <div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm dark:border-emerald-800 dark:bg-emerald-950/30">
+              <p className="font-medium text-emerald-900 dark:text-emerald-300">
+                Fully funded — {f.money(currentSavings)} covers{" "}
+                {result.monthsCovered.toFixed(1)} months of expenses, past your{" "}
+                {targetMonths}-month target.
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       <div className="mt-6 rounded-lg border border-slate-200 bg-white p-4 text-sm dark:border-slate-700 dark:bg-slate-800">

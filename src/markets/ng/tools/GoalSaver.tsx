@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useFormat, fieldDef, StatTile, ResultRow } from "@/components/tools/shared";
+import { planGoal } from "@/lib/finance/savings";
+import { useFormat, fieldDef, StatTile } from "@/components/tools/shared";
 
 export default function GoalSaver() {
   const f = useFormat();
@@ -11,13 +12,16 @@ export default function GoalSaver() {
   const [existingSavings, setExistingSavings] = useState(0);
 
   const result = useMemo(() => {
-    const monthlyInflation = inflationPct / 100 / 12;
-    const inflatedGoal = Math.round(goal * Math.pow(1 + monthlyInflation, months));
-    const gap = inflatedGoal - existingSavings;
-    const monthly = gap > 0 ? Math.round(gap / months) : 0;
-    const totalSaved = monthly * months + existingSavings;
-    const inflationShortfall = inflatedGoal - goal;
-    return { inflatedGoal, gap, monthly, totalSaved, inflationShortfall };
+    try {
+      return planGoal({
+        goalToday: goal,
+        months,
+        annualInflationPct: inflationPct,
+        existingSavings,
+      });
+    } catch {
+      return null;
+    }
   }, [goal, months, inflationPct, existingSavings]);
 
   return (
@@ -66,34 +70,40 @@ export default function GoalSaver() {
         ))}
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        <StatTile
-          label="Inflated target"
-          value={f.money(result.inflatedGoal)}
-          detail={`${f.plain(result.inflationShortfall)} more than today's price`}
-        />
-        <StatTile
-          label="Monthly to save"
-          value={f.money(result.monthly)}
-          detail={`${months} months`}
-        />
-        <StatTile
-          label="Total you'll save"
-          value={f.money(result.totalSaved)}
-          detail={`incl. ${f.money(existingSavings)} already set aside`}
-        />
-      </div>
+      {result && (
+        <>
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            <StatTile
+              label="Inflated target"
+              value={f.money(result.inflatedGoal)}
+              detail={`${f.money(result.inflationPremium)} more than today's price`}
+            />
+            <StatTile
+              label="Monthly to save"
+              value={f.money(result.monthlyContribution)}
+              detail={result.alreadyFunded ? "Already funded" : `for ${months} months`}
+            />
+            <StatTile
+              label="Total you'll put in"
+              value={f.money(result.totalContributed)}
+              detail={`incl. ${f.money(existingSavings)} already set aside`}
+            />
+          </div>
 
-      <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-950/30">
-        <p className="font-medium text-amber-900 dark:text-amber-300">
-          At {inflationPct}% inflation, {f.money(goal)} today becomes{' '}
-          {f.money(result.inflatedGoal)} in {months} months.
-        </p>
-        <p className="mt-1 text-amber-700 dark:text-amber-400">
-          If you save toward today's price, you'll be {f.money(result.inflationShortfall)} short.
-          That's why the target is inflated — so you're saving toward the right number.
-        </p>
-      </div>
+          <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-950/30">
+            <p className="font-medium text-amber-900 dark:text-amber-300">
+              At {inflationPct}% inflation, {f.money(goal)} today becomes{" "}
+              {f.money(result.inflatedGoal)} in {months} months.
+            </p>
+            <p className="mt-1 text-amber-700 dark:text-amber-400">
+              Saving toward today&apos;s price would leave you{" "}
+              {f.money(result.inflationPremium)} short. The target above is the
+              inflated one, so the monthly figure is the amount that actually
+              gets you there.
+            </p>
+          </div>
+        </>
+      )}
     </div>
   );
 }

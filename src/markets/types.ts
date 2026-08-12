@@ -74,6 +74,18 @@ export interface MarketConfig {
   /** How many months of expenses the emergency fund advice targets. */
   emergencyFundTargetMonths: number;
 
+  /**
+   * Whether this market has a Quick Check recommendation engine.
+   *
+   * `src/lib/recommendation.ts` is written entirely around US products —
+   * 401(k) matching, PMI cancellation, 30-year mortgage prepayment. Running it
+   * for another market would hand a visitor confident, specific advice about
+   * financial instruments they do not have. Until a market has its own engine
+   * this stays false and the route, the nav link and the home card all
+   * disappear rather than shipping something plausible and wrong.
+   */
+  hasQuickCheck: boolean;
+
   /** One-sentence disclaimer, market-appropriate. */
   disclaimer: string;
 }

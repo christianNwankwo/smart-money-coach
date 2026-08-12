@@ -18,11 +18,19 @@ const SITE = process.env.SITE_URL ?? "https://smartmoneycoach.com";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const OUT = `${ROOT}/out`;
 
-const reg = loadTs(new URL("../src/registry.ts", import.meta.url));
+const MARKET = process.env.NEXT_PUBLIC_MARKET ?? "us";
+const reg = loadTs(new URL(`../src/markets/${MARKET}/registry.ts`, import.meta.url));
+const config = loadTs(new URL(`../src/markets/${MARKET}.ts`, import.meta.url));
+const marketConfig = config[`${MARKET}Market`];
 
 const urls = [
   { loc: `${SITE}/`, changefreq: "weekly", priority: "1.0" },
-  { loc: `${SITE}/recommendation/`, changefreq: "monthly", priority: "0.9" },
+  // Only listed where the market actually has a recommendation engine — the
+  // page still exists as a file, but it says "not available here" and is
+  // marked noindex, so advertising it in the sitemap would be a bad signal.
+  ...(marketConfig.hasQuickCheck
+    ? [{ loc: `${SITE}/recommendation/`, changefreq: "monthly", priority: "0.9" }]
+    : []),
   ...reg.tools.map((tool) => ({
     loc: `${SITE}/tools/${tool.slug}/`,
     changefreq: "monthly",

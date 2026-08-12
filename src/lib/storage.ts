@@ -6,6 +6,11 @@ export function saveProfile(profile: FinancialProfile): void {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
 }
 
+export function clearProfile(): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(STORAGE_KEY);
+}
+
 export function loadProfile(): FinancialProfile | null {
   if (typeof window === "undefined") return null;
   const raw = sessionStorage.getItem(STORAGE_KEY);

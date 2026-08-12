@@ -56,7 +56,6 @@ export function ResultRow({
 export interface FieldConfig {
   key: string;
   label: string;
-  unit?: string;
   value: number;
   set: (v: number) => void;
   min?: number;
@@ -70,46 +69,8 @@ export function fieldDef(
   value: number,
   set: (v: number) => void,
   opts?: { min?: number; max?: number; step?: number }
-): FieldConfig;
-export function fieldDef(
-  label: string,
-  _unit: string,
-  key: string,
-  value: number,
-  set: (v: number) => void,
-  opts?: { min?: number; max?: number; step?: number }
-): FieldConfig;
-export function fieldDef(
-  label: string,
-  unitOrKey: string,
-  keyOrValue: string | number,
-  setOrValue: number | ((v: number) => void),
-  setOrOpts?: ((v: number) => void) | { min?: number; max?: number; step?: number },
-  opts?: { min?: number; max?: number; step?: number }
 ): FieldConfig {
-  // Backward-compatible: the old signature was (label, unit, key, value, set, opts?)
-  // The new signature is (label, key, value, set, opts?)
-  let key: string;
-  let value: number;
-  let set: (v: number) => void;
-  let resolvedOpts: { min?: number; max?: number; step?: number } | undefined;
-
-  let u: string | undefined;
-  if (typeof setOrValue === "number") {
-    // Old signature: (label, unit, key, value, set, opts?)
-    u = unitOrKey;
-    key = keyOrValue as string;
-    value = setOrValue;
-    set = setOrOpts as (v: number) => void;
-    resolvedOpts = opts;
-  } else {
-    // New signature: (label, key, value, set, opts?)
-    key = unitOrKey;
-    value = keyOrValue as number;
-    set = setOrValue;
-    resolvedOpts = setOrOpts as { min?: number; max?: number; step?: number } | undefined;
-  }
-  return { key, label, unit: u ?? undefined, value, set, ...resolvedOpts };
+  return { key, label, value, set, ...opts };
 }
 
 /** Market-aware number formatting — use this hook instead of the static `fmt`. */

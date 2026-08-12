@@ -128,7 +128,7 @@ export default function DebtPayoff() {
       {/* Extra monthly */}
       <div className="mt-4 max-w-xs">
         {[
-          fieldDef("Extra per month", "$", "extra", extraMonthly, setExtraMonthly, {
+          fieldDef("Extra per month", "extra", extraMonthly, setExtraMonthly, {
             min: 0,
             step: 50,
           }),
